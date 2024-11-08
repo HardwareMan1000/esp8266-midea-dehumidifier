@@ -298,7 +298,33 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     char payloadText[length + 1];
     snprintf(payloadText, length + 1, "%s", payload);
     mqttClient.publish(MQTT_TOPIC_ECHO, payloadText, true);
-    
+    handleStateUpdateRequest(payloadText, "", "", 0);
+    getStatus();
+  }
+  if (strcmp(topic, MQTT_TOPIC_MODE) == 0) {
+    char payloadText[length + 1];
+    snprintf(payloadText, length + 1, "%s", payload);
+    mqttClient.publish(MQTT_TOPIC_ECHO, payloadText, true);
+    handleStateUpdateRequest("", payloadText, "", 0);
+    getStatus();
+  }
+  if (strcmp(topic, MQTT_TOPIC_FAN_SPEED) == 0) {
+    char payloadText[length + 1];
+    snprintf(payloadText, length + 1, "%s", payload);
+    mqttClient.publish(MQTT_TOPIC_ECHO, payloadText, true);
+    handleStateUpdateRequest("", "", payloadText, 0);
+    getStatus();
+  }
+  if (strcmp(topic, MQTT_TOPIC_HUMIDITY_SETPOINT) == 0) {
+    char payloadText[length + 1];
+    int payloadNumber=0;
+    char *payloadEnd;
+    snprintf(payloadText, length + 1, "%s", payload);
+    payloadNumber = strtol(payloadText, &payloadEnd, 10);
+    //snprintf(payloadText, length + 1, "%d", payload);
+    mqttClient.publish(MQTT_TOPIC_ECHO, payloadText, true);
+    handleStateUpdateRequest("", "", "", payloadNumber);
+    getStatus();
   }
   if (strcmp(topic, MQTT_TOPIC_COMMAND) == 0) {
     DynamicJsonDocument commandJson(256);
