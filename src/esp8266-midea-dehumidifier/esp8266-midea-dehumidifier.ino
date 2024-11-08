@@ -22,9 +22,9 @@ WiFiManager wifiManager;
 WiFiClient wifiClient;
 PubSubClient mqttClient;
 
-WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, sizeof(mqtt_server));
-WiFiManagerParameter custom_mqtt_user("user", "MQTT username", username, sizeof(username));
-WiFiManagerParameter custom_mqtt_pass("pass", "MQTT password", password, sizeof(password));
+WiFiManagerParameter custom_mqtt_server("172.16.50.104", "mqtt server", mqtt_server, sizeof(mqtt_server));
+WiFiManagerParameter custom_mqtt_user("osuszacz", "MQTT username", username, sizeof(username));
+WiFiManagerParameter custom_mqtt_pass("fsadf234fsdfsww11", "MQTT password", password, sizeof(password));
 
 unsigned long lastMqttConnectionAttempt = millis();
 const long mqttConnectionInterval = 60000;
@@ -33,26 +33,34 @@ unsigned long statusPollPreviousMillis = millis();
 const long statusPollInterval = 30000;
 
 char identifier[24];
-#define FIRMWARE_PREFIX "esp8266-midea-dehumidifier"
+#define FIRMWARE_PREFIX "esp8266-midea-test"
 #define AVAILABILITY_ONLINE "online"
 #define AVAILABILITY_OFFLINE "offline"
 char MQTT_TOPIC_AVAILABILITY[128];
 char MQTT_TOPIC_STATE[128];
+char MQTT_TOPIC_STATE_ONOFF[128];
+char MQTT_TOPIC_HUMIDITY_SETPOINT[128];
+char MQTT_TOPIC_HUMIDITY_CURRENT[128];
+char MQTT_TOPIC_ERROR_CODE[128];
+char MQTT_TOPIC_FAN_SPEED[128];
+char MQTT_TOPIC_MODE[128];
+char MQTT_TOPIC_WIFI_SSID[128];
+char MQTT_TOPIC_WIFI_IP[128];
+char MQTT_TOPIC_WIFI_RSSI[128];
+char MQTT_TOPIC_ECHO[128];
+
 char MQTT_TOPIC_COMMAND[128];
 
 char MQTT_TOPIC_AUTOCONF_WIFI_SENSOR[128];
 char MQTT_TOPIC_AUTOCONF_HUMIDITY_SENSOR[128];
 
-
 char MQTT_TOPIC_AUTOCONF_FAN[128];
 char MQTT_TOPIC_AUTOCONF_HUMIDIFIER[128];
 
 
-
-
 bool shouldSaveConfig = false;
 
-void saveConfigCallback () {
+void saveConfigCallback() {
   shouldSaveConfig = true;
 }
 
@@ -74,13 +82,27 @@ void setup() {
   snprintf(identifier, sizeof(identifier), "DEHUMIDIFIER-%X", ESP.getChipId());
   snprintf(MQTT_TOPIC_AVAILABILITY, 127, "%s/%s/status", FIRMWARE_PREFIX, identifier);
   snprintf(MQTT_TOPIC_STATE, 127, "%s/%s/state", FIRMWARE_PREFIX, identifier);
+  snprintf(MQTT_TOPIC_STATE_ONOFF, 127, "%s/%s/stateonoff", FIRMWARE_PREFIX, identifier);
+  snprintf(MQTT_TOPIC_HUMIDITY_SETPOINT, 127, "%s/%s/humiditySetpoint", FIRMWARE_PREFIX, identifier);
+  snprintf(MQTT_TOPIC_HUMIDITY_CURRENT, 127, "%s/%s/humiditCurrent", FIRMWARE_PREFIX, identifier);
+  snprintf(MQTT_TOPIC_ERROR_CODE, 127, "%s/%s/errorCode", FIRMWARE_PREFIX, identifier);
+  snprintf(MQTT_TOPIC_FAN_SPEED, 127, "%s/%s/fanSpeed", FIRMWARE_PREFIX, identifier);
+  snprintf(MQTT_TOPIC_MODE, 127, "%s/%s/mode", FIRMWARE_PREFIX, identifier);
+  snprintf(MQTT_TOPIC_WIFI_SSID, 127, "%s/%s/wifi/ssid", FIRMWARE_PREFIX, identifier);
+  snprintf(MQTT_TOPIC_WIFI_IP, 127, "%s/%s/wifi/ip", FIRMWARE_PREFIX, identifier);
+  snprintf(MQTT_TOPIC_WIFI_RSSI, 127, "%s/%s/wifi/rssi", FIRMWARE_PREFIX, identifier);
+
+  snprintf(MQTT_TOPIC_ECHO, 127, "%s/%s/echo", FIRMWARE_PREFIX, identifier);
+
   snprintf(MQTT_TOPIC_COMMAND, 127, "%s/%s/command", FIRMWARE_PREFIX, identifier);
 
-  snprintf(MQTT_TOPIC_AUTOCONF_HUMIDITY_SENSOR, 127, "homeassistant/sensor/%s/%s_humidity/config", FIRMWARE_PREFIX, identifier);
-  snprintf(MQTT_TOPIC_AUTOCONF_WIFI_SENSOR, 127, "homeassistant/sensor/%s/%s_wifi/config", FIRMWARE_PREFIX, identifier);
 
-  snprintf(MQTT_TOPIC_AUTOCONF_FAN, 127, "homeassistant/select/%s/%s_fan/config", FIRMWARE_PREFIX, identifier);
-  snprintf(MQTT_TOPIC_AUTOCONF_HUMIDIFIER, 127, "homeassistant/humidifier/%s/%s_dehumidifier/config", FIRMWARE_PREFIX, identifier);
+
+  snprintf(MQTT_TOPIC_AUTOCONF_HUMIDITY_SENSOR, 127, "mddf-20den7-wf/sensors/%s/%s_humidity/config", FIRMWARE_PREFIX, identifier);
+  snprintf(MQTT_TOPIC_AUTOCONF_WIFI_SENSOR, 127, "mddf-20den7-wf/sensors/%s/%s_wifi/config", FIRMWARE_PREFIX, identifier);
+
+  snprintf(MQTT_TOPIC_AUTOCONF_FAN, 127, "mddf-20den7-wf/select/%s/%s_fan/config", FIRMWARE_PREFIX, identifier);
+  snprintf(MQTT_TOPIC_AUTOCONF_HUMIDIFIER, 127, "mddf-20den7-wf/humidifier/%s/%s_dehumidifier/config", FIRMWARE_PREFIX, identifier);
 
 
   WiFi.hostname(identifier);
@@ -137,7 +159,7 @@ void loop() {
     getStatus();
   }
 
-  if (!mqttClient.connected() && (mqttConnectionInterval <= (millis() - lastMqttConnectionAttempt)) )  {
+  if (!mqttClient.connected() && (mqttConnectionInterval <= (millis() - lastMqttConnectionAttempt))) {
     lastMqttConnectionAttempt = millis();
     mqttReconnect();
   }
@@ -176,17 +198,32 @@ void resetWifiSettingsAndReboot() {
   ESP.restart();
 }
 
-void mqttReconnect()
-{
+void mqttReconnect() {
+  char payload[256];
   for (int attempt = 0; attempt < 3; ++attempt) {
     if (mqttClient.connect(identifier, username, password, MQTT_TOPIC_AVAILABILITY, 1, true, AVAILABILITY_OFFLINE)) {
       mqttClient.publish(MQTT_TOPIC_AVAILABILITY, AVAILABILITY_ONLINE, true);
+      snprintf(payload, 127, "%s", state.powerOn ? "on" : "off");
+      mqttClient.publish(MQTT_TOPIC_STATE_ONOFF, payload, true);
+      snprintf(payload, 127, "%d", state.humiditySetpoint);
+  //    stateJson["humiditySetpoint"] = state.humiditySetpoint;
+      mqttClient.publish(MQTT_TOPIC_HUMIDITY_SETPOINT, payload, true);
+      snprintf(payload, 127, "%d", state.fanSpeed);
+      mqttClient.publish(MQTT_TOPIC_FAN_SPEED, payload, true);
+      snprintf(payload, 127, "%d", state.fanSpeed);
+      mqttClient.publish(MQTT_TOPIC_FAN_SPEED, payload, true);
+
+
       updateAndSendNetworkStatus(true);
       getStatus();
       publishAutoConfig();
 
       //Make sure to subscribe after polling the status so that we never execute commands with the default data
       mqttClient.subscribe(MQTT_TOPIC_COMMAND);
+      mqttClient.subscribe(MQTT_TOPIC_STATE_ONOFF);
+      mqttClient.subscribe(MQTT_TOPIC_HUMIDITY_SETPOINT);
+      mqttClient.subscribe(MQTT_TOPIC_FAN_SPEED);
+      mqttClient.subscribe(MQTT_TOPIC_MODE);
       break;
     } else {
       delay(5000);
@@ -203,6 +240,12 @@ void publishState() {
   DynamicJsonDocument stateJson(604);
   char payload[256];
 
+  mqttClient.publish(MQTT_TOPIC_AVAILABILITY, AVAILABILITY_ONLINE, true);
+  stateJson["state"] = state.powerOn ? "on" : "off";
+  mqttClient.publish(MQTT_TOPIC_STATE_ONOFF, stateJson["state"], true);
+  stateJson["humiditySetpoint"] = state.humiditySetpoint;
+  mqttClient.publish(MQTT_TOPIC_HUMIDITY_SETPOINT, stateJson["humiditySetpoint"], true);
+/*
   wifiJson["ssid"] = WiFi.SSID();
   wifiJson["ip"] = WiFi.localIP().toString();
   wifiJson["rssi"] = WiFi.RSSI();
@@ -243,9 +286,20 @@ void publishState() {
 
   serializeJson(stateJson, payload);
   mqttClient.publish(MQTT_TOPIC_STATE, payload, true);
+  mqttClient.publish(MQTT_TOPIC_STATE_ONOFF, stateJson["state"], true);
+  mqttClient.publish(MQTT_TOPIC_HUMIDITY_SETPOINT, stateJson["humiditySetpoint"], true);
+  mqttClient.publish(MQTT_TOPIC_HUMIDITY_CURRENT, stateJson["humidityCurrent"], true);
+  mqttClient.publish(MQTT_TOPIC_ERROR_CODE, stateJson["errorCode"], true);
+  */
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  if (strcmp(topic, MQTT_TOPIC_STATE_ONOFF) == 0) {
+    char payloadText[length + 1];
+    snprintf(payloadText, length + 1, "%s", payload);
+    mqttClient.publish(MQTT_TOPIC_ECHO, payloadText, true);
+    
+  }
   if (strcmp(topic, MQTT_TOPIC_COMMAND) == 0) {
     DynamicJsonDocument commandJson(256);
     char payloadText[length + 1];
@@ -259,8 +313,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         commandJson["state"].as<String>(),
         commandJson["mode"].as<String>(),
         commandJson["fanSpeed"].as<String>(),
-        commandJson["humiditySetpoint"].as<byte>()
-      );
+        commandJson["humiditySetpoint"].as<byte>());
 
       getStatus();
     }
@@ -268,6 +321,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 }
 
 void publishAutoConfig() {
+  
+  /*
   char mqttPayload[2048];
   DynamicJsonDocument device(256);
   DynamicJsonDocument autoconfPayload(1024);
@@ -384,4 +439,5 @@ void publishAutoConfig() {
   mqttClient.publish(MQTT_TOPIC_AUTOCONF_HUMIDIFIER, mqttPayload, true);
 
   autoconfPayload.clear();
+  */
 }
